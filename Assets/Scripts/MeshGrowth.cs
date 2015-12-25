@@ -1,9 +1,15 @@
 ﻿using System;
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
+using Framework;
+using Framework.Extensions;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Das Mesh muss aus Gleichseitigen Dreiecken bestehen
+/// </summary>
 public class MeshGrowth : MonoBehaviour
 {
     public float Width = 1f;
@@ -82,7 +88,72 @@ public class MeshGrowth : MonoBehaviour
         var newTriangles = meshFilter.mesh.triangles.ToList();
         newTriangles.AddRange(new []{ randomIndex1 , randomIndex2 , newIndex });
         meshFilter.mesh.triangles = newTriangles.ToArray();
+    }
 
+    /// <summary>
+    /// Lässt das Mesh wachsen
+    /// </summary>
+    private void Grow2()
+    {
+        // Wähle ein freies Vertice aus.
+        GetVerticeIndicesWithEmptyNeighbour();
+    }
+
+    private List<int> GetVerticeIndicesWithEmptyNeighbour()
+    {
+        List<int> indicesOfAvailableVertices = new List<int>();
+        for(int verticeIndex = 0; verticeIndex < meshFilter.mesh.vertices.Length; verticeIndex++)
+        {
+            // Schau ob das vertice in nur 6 Triangles vorkommt
+            var index = verticeIndex;
+            if (meshFilter.mesh.triangles.Count(i => i == index) < 6)
+            {
+                indicesOfAvailableVertices.Add(verticeIndex);
+            }
+        }
+        return indicesOfAvailableVertices;
+    }
+
+    /// <summary>
+    /// Gibt Tuples mit nachbarn zurück und Informationen darüber, ob diese Nachbarn besetzt sind.
+    /// </summary>
+    private FreeSpace2D GetFreeSpace(int verticeIndex)
+    {
+        var result = new FreeSpace2D();
+
+        var neighbourUsages = new Dictionary<int, int> ();
+
+        var triangles = new List<int[]>();
+
+        
+        for (int triangle = 0; triangle + 2 < meshFilter.mesh.triangles.Length; triangle += 2)
+        {
+            // Get all using triangles
+            var currentTriangle = meshFilter.mesh.triangles.SubArray(triangle, 2);
+            if (meshFilter.mesh.triangles.SubArray(triangle,2).Contains(verticeIndex))
+            {
+                triangles.Add(currentTriangle);
+
+                // Get all existing neighbours
+                foreach (var index in currentTriangle.Where(index => index != verticeIndex))
+                {
+                    neighbourUsages[index]++;
+                }
+            }
+        }
+
+        // Find neighbours with free second neighbour
+        var freeNeighbours = new List<Tuple<int, Vector3>>();
+        foreach (var freeNeighbour in neighbourUsages.Where((pair) => pair.Value == 1))
+        {
+            freeNeighbours.Add(Tuple.New(freeNeighbour.Key, meshFilter.mesh.vertices[freeNeighbour.Key]));
+        }
+
+        // Remove free spaces 
+        
+
+
+        return result;
     }
 
 }
