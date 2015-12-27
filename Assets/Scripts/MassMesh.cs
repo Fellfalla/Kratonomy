@@ -16,9 +16,9 @@ public class MassMesh : MonoBehaviour
         MeshFilter filter = gameObject.AddComponent<MeshFilter>();
         filter.mesh = GenerateMesh();
 
-        MeshCollider collider = gameObject.AddComponent<MeshCollider>();
-        collider.sharedMesh = filter.mesh;
-        collider.convex = true;
+        MeshCollider meshCollider = gameObject.AddComponent<MeshCollider>();
+        meshCollider.convex = true;
+        meshCollider.sharedMesh = filter.mesh;
     }
 
     Mesh GenerateMesh()

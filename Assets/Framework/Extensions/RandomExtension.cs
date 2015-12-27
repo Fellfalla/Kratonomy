@@ -9,10 +9,22 @@ namespace Framework.Extensions
     {
         public static T GetRandomElement<T>(this IEnumerable<T> enumerable)
         {
+            if (enumerable == null)
+            {
+                throw new ArgumentNullException("enumerable");
+            }
+
+            if (!enumerable.Any())
+            {
+                return default(T);
+            }
+
             var random = new Random();
-            
-            int index = random.Next(0, enumerable.Count());
-            return enumerable.ToArray()[index];
+
+            var castedEnum = enumerable.ToArray();
+
+            int index = random.Next(0, castedEnum.Length);
+            return castedEnum[index];
         }
     }
 }

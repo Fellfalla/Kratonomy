@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using Assets.Framework;
+using Assets.Framework.Extensions;
 using Framework.Extensions;
 using UnityEditor;
 using UnityEngine;
@@ -16,181 +19,209 @@ namespace Framework
     {
         public static float Tolerance = 0.01f;
 
+        private static Vector3 normalVector = Vector3.forward;
+
         public FreeSpace2D()
         {
-            _degreesOfFreeSpace = new List<Angle>()
-            {
-                Angle.New(0f,360f),
-            };
+            var initialRegion = new RadialSpace(0f, 360f);
+            initialRegion.NextRegion = initialRegion;
+            initialRegion.PreviousRegion = initialRegion;
+            AddRegion(initialRegion);
+        }
 
-            _degreesOfNotFreeSpace = new List<Angle>();
+        /// <summary>
+        /// Gibt Tuples mit nachbarn zurück und Informationen darüber, ob diese Nachbarn besetzt sind.
+        /// </summary>
+        public static FreeSpace2D GetFreeSpace(Vertice vertice)
+        {
+            var result = new FreeSpace2D();
+            result.CenterVertice = vertice;
+            //var neighbourUsages = new Dictionary<int, int>();
+
+            //foreach (var triangle in vertice.Triangles)
+            //{
+            //    // Get all existing neighbours
+            //    foreach (var index in triangle.Where(index => index != vertice.Index))
+            //    {
+            //        if (!neighbourUsages.ContainsKey(index))
+            //        {
+            //            neighbourUsages.Add(index, 1);
+            //        }
+            //        else
+            //        {
+            //            neighbourUsages[index]++;
+            //        }
+            //    }
+            //}
+
+            //// Find neighbours with free second neighbour
+            //var freeNeighbours = new List<Tuple<int, Vector3>>();
+            //foreach (var freeNeighbour in neighbourUsages.Where((pair) => pair.Value == 1))
+            //{
+            //    freeNeighbours.Add(Tuple.New(freeNeighbour.Key, vertice.Mesh.vertices[freeNeighbour.Key]));
+            //}
+
+            // Remove free spaces 
+            foreach (var triangle in vertice.Triangles)
+            {
+                var neighbourIndices = triangle.Where(index => index != vertice.Index).ToArray();
+
+                // Get first direction
+                var direction1 = vertice.Mesh.vertices[neighbourIndices[0]] - vertice.Mesh.vertices[vertice.Index];
+
+                // Get second direction
+                var direction2 = vertice.Mesh.vertices[neighbourIndices[1]] - vertice.Mesh.vertices[vertice.Index];
+
+                // Get angle between triangle points
+                var angle = direction1.PlanarAngle(direction2, normalVector);
+                float beginAngle;
+                Vertice openingVertice;
+                Vertice closingVertice;
+                if (angle < 180)
+                {
+                    beginAngle = Convert.ToSingle(Vector3.up.PlanarAngle(direction1, normalVector));
+                    openingVertice = new Vertice(vertice.Mesh, neighbourIndices[0]);
+                    closingVertice = new Vertice(vertice.Mesh, neighbourIndices[1]);
+                }
+                else // The triangle mesh is closed in other direction
+                {
+
+                    angle = direction2.PlanarAngle(direction1, normalVector);
+                    beginAngle = Convert.ToSingle(Vector3.up.PlanarAngle(direction2, normalVector));
+                    openingVertice = new Vertice(vertice.Mesh, neighbourIndices[1]);
+                    closingVertice = new Vertice(vertice.Mesh, neighbourIndices[0]);
+                    //
+                }
+                var endAngle = beginAngle + Convert.ToSingle(angle);
+
+                var newRegion = new RadialSpace(beginAngle, endAngle);
+                newRegion.CenterVertice = vertice;
+                newRegion.ClosingVertice = closingVertice;
+                newRegion.OpeningVertice = openingVertice;
+
+                // Remove Space
+                result.AddRegion(newRegion);
+            }
+
+            return result;
         }
 
         /// <summary>
         /// Each free space goes from the first vector in direction of the second vector
         /// </summary>
-        private List<Angle> _degreesOfFreeSpace;        
-        
-        /// <summary>
-        /// Each free space goes from the first vector in direction of the second vector
-        /// </summary>
-        private List<Angle> _degreesOfNotFreeSpace;
+        public readonly List<RadialSpace> Regions = new List<RadialSpace>();        
 
-        public int CenterVertice { get; set; }
+        public Vertice CenterVertice { get; set; }
 
         public MeshFilter MeshFilter { get; set; }
 
-        public List<Angle> GetDegreesOfFreeSpace()
+        public IEnumerable<RadialSpace> GetRegionsOfFreeSpace()
         {
-            return _degreesOfFreeSpace;
+            var result = Regions.Where(region => !region.IsBlocked);
+            return result;
         }
 
-        public List<Angle> GetDegreesOfBlockedSpace()
+        public IEnumerable<RadialSpace> GetRegionsOfBlockedSpace()
         {
-            return _degreesOfNotFreeSpace;
+            return Regions.Where(region => !region.IsBlocked);
         }
 
-        public void AddBlockedSpace(float begin, float end, int beginVertice, int endVertice, int centerVertice)
+        public void AddRegion(RadialSpace newRegion)
         {
-            begin = FormatDegrees(begin);
-            end = FormatDegrees(end);
-
-            if(!AreParametersValid(begin, end))
-            {
-                return; // if parameters are no valid -> do nothing
-            }
-
-            AddRegion(begin, end, beginVertice, endVertice, centerVertice, _degreesOfNotFreeSpace);
-
-            RemoveRegion(begin, end, _degreesOfFreeSpace);
-
-        }
-
-        public void RemoveBlockedSpace(float begin, float end, int beginVertice, int endVertice, int centerVertice )
-        {
-            begin = FormatDegrees(begin);
-            end = FormatDegrees(end);
-
-            if (!AreParametersValid(begin, end))
-            {
-                return; // if parameters are no valid -> do nothing
-            }
-
-            AddRegion(begin, end, beginVertice, endVertice, centerVertice, _degreesOfFreeSpace);
-            RemoveRegion(begin, end, _degreesOfNotFreeSpace);
-        }
-
-        private static void AddRegion(float begin, float end,int beginVertice, int endVertice, int centerVertice, List<Angle> regionCollection )
-        {
-            var angle = Angle.New(begin, end);
-            angle.OpeningVertice = beginVertice;
-            angle.ClosingVertice = endVertice;
-            angle.TargetVertice = centerVertice;
-            regionCollection.Add(angle);
-        }
-
-        private void RemoveRegion(float begin, float end, List<Angle> regionCollection)
-        {
-
 
             // Search affected Regions
-            foreach (var region in regionCollection)
+            foreach (var region in Regions.ToArray())
             {
-                if (begin.IsAlmostEqual(region.First, Tolerance) && end.IsAlmostEqual(region.Second, Tolerance)) // Anfang und ende stimmen
+                if (!newRegion.IntersectsWith(region)) { continue;}
+
+                if (newRegion.Equals(region)) // Anfang und ende stimmen
                 {
-                    regionCollection.Remove(region);
+                    RemoveRegion(region);
                 }
 
-                else if (begin.IsAlmostEqual(region.First, Tolerance)) // Startpunkte stimmen überein
+                else if (region.BeginsWith(newRegion)) // Startpunkte stimmen überein
                 {
                     // Verkleinern falls das ende innerhalb der region liegt
-                    if (IsWithinRegion(end, region))
+                    if (region.ContainsDirection(newRegion.End))
                     {
-                        region.First = end;
+                        region.PreviousRegion = newRegion;
+
                     }
                     else // komplett löschen, falls das ende ausserhalb der region oder auf dem Rand liegt
                     {
-                        regionCollection.Remove(region);
+                        RemoveRegion(region); // todo: vertice informationen anpassen
+                        continue;
                     }
                 }
 
-                else if (end.IsAlmostEqual(region.Second, Tolerance)) // Endpunkte stimmen überein
+                else if (region.EndsWith(newRegion)) // Endpunkte stimmen überein
                 {
                     // Verkleinern falls der anfang innerhalb der region liegt
-                    if (IsWithinRegion(begin, region))
+                    if (region.ContainsDirection(newRegion.Begin))
                     {
-                        region.Second = begin;
+                        region.NextRegion = newRegion;
                     }
                     else // komplett löschen, falls der Anfang ausserhalb der region oder auf dem Rand liegt
                     {
-                        regionCollection.Remove(region);
+                        RemoveRegion(region);
                     }
                 }
 
-                else if (IsWithinRegion(begin, region) && IsWithinRegion(end, region)) // Startpunkt und Endpunkt liegen innerhalb der region
+                else if (newRegion.IsCompleteWithin(region)) // Startpunkt und Endpunkt liegen innerhalb der region
                 {
                     // Erzeuge 2 neue kleinere regionen
-                    region.Second = begin;
-                    var newRegion = Angle.New(end, region.Second);
-                    regionCollection.Add(newRegion);
+                    // Die neue Region ist die Region hinter newRegion
+                    var additionalRegion = new RadialSpace(newRegion, region.NextRegion);
+
+                    region.NextRegion = newRegion;
+
+                    Regions.Add(additionalRegion);
                 }
-                else if (IsWithinRegion(begin, region)) // Startpunkt liegt innerhalb der region
+
+                else if (region.ContainsDirection(newRegion.Begin)) // Startpunkt liegt innerhalb der region und ende liegt ausserhalb
                 {
-                    region.Second = begin;
+                    region.NextRegion = newRegion;
                 }
-                else if (IsWithinRegion(end, region)) // Endpunkt liegt innerhalb der region
+
+                else if (region.ContainsDirection(newRegion.End)) // Endpunkt liegt innerhalb der region und anfang liegt ausserhalb
                 {
 
-                    region.Second = begin;
+                    region.PreviousRegion = newRegion;
                 }
 
             }
 
-            regionCollection.Add(Angle.New(begin, end));
+            Regions.Add(newRegion);
+
+            CleanRegions();
         }
 
-
-        private bool AreParametersValid(float begin, float end)
+        private void RemoveRegion(RadialSpace region)
         {
-            // Are valid if not almost equal
-            return !begin.IsAlmostEqual(second: end, tolerance: Tolerance);
+            region.PreviousRegion.NextRegion = region.NextRegion;
+
+            region.NextRegion.PreviousRegion = region.PreviousRegion;
+
+            Regions.Remove(region);
         }
 
-
-        private bool IsWithinRegion(float value, Angle region)
+        private void CleanRegions()
         {
-            bool valueIsOnEdge = (value.IsAlmostEqual(region.First, Tolerance) ||
-                      value.IsAlmostEqual(region.Second, Tolerance));
+            // Bereinigt redundante regionen
 
-            if (region.First > region.Second)
+            foreach (var region in Regions.ToArray())
             {
-                return !valueIsOnEdge && (value > region.First || value < region.Second);
-            }
-            else // Der zweite ist größer als der erste
-            {
-                return !valueIsOnEdge && (value > region.First && value < region.Second);
-            }
-        }
-
-
-
-        private float FormatDegrees(float value)
-        {
-            if (value > 360)
-            {
-                value = value % 360;
-            }
-
-            else if (value < 0)
-            {
-                while (value < 0)
+                if (region != region.NextRegion && !region.IsBlocked && !region.NextRegion.IsBlocked)
                 {
-                    // e.g. make -50 degree to 310 degree
-                    value += 360;
+                    // Vereinige 2 Regionen, falls beide nicht blockiert sind
+                    var mergedRegion = RadialSpace.MergeRadialSpaces(region, region.NextRegion);
+                    RemoveRegion(region);
+                    RemoveRegion(region.NextRegion);
+                    AddRegion(mergedRegion);
                 }
             }
 
-            return value;
+            //throw new NotImplementedException();
         }
     }
 }
