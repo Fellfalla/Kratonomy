@@ -7,8 +7,8 @@ namespace Framework
 {
     public class Tuple<T1, T2>
     {
-        public T1 First { get; set; }
-        public T2 Second { get; set; }
+        public virtual T1 First { get; set; }
+        public virtual T2 Second { get; set; }
         internal Tuple(T1 first, T2 second)
         {
             First = first;

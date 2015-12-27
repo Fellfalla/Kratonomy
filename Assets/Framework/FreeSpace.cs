@@ -18,25 +18,39 @@ namespace Framework
 
         public FreeSpace2D()
         {
-            _degreesOfFreeSpace = new List<Tuple<float, float>>()
+            _degreesOfFreeSpace = new List<Angle>()
             {
-                Tuple.New(0f,360f),
+                Angle.New(0f,360f),
             };
 
-            _degreesOfNotFreeSpace = new List<Tuple<float, float>>();
+            _degreesOfNotFreeSpace = new List<Angle>();
         }
 
         /// <summary>
         /// Each free space goes from the first vector in direction of the second vector
         /// </summary>
-        private List<Tuple<float, float>> _degreesOfFreeSpace;        
+        private List<Angle> _degreesOfFreeSpace;        
         
         /// <summary>
         /// Each free space goes from the first vector in direction of the second vector
         /// </summary>
-        private List<Tuple<float, float>> _degreesOfNotFreeSpace;
+        private List<Angle> _degreesOfNotFreeSpace;
 
-        public void AddBlockedSpace(float begin, float end)
+        public int CenterVertice { get; set; }
+
+        public MeshFilter MeshFilter { get; set; }
+
+        public List<Angle> GetDegreesOfFreeSpace()
+        {
+            return _degreesOfFreeSpace;
+        }
+
+        public List<Angle> GetDegreesOfBlockedSpace()
+        {
+            return _degreesOfNotFreeSpace;
+        }
+
+        public void AddBlockedSpace(float begin, float end, int beginVertice, int endVertice, int centerVertice)
         {
             begin = FormatDegrees(begin);
             end = FormatDegrees(end);
@@ -46,12 +60,13 @@ namespace Framework
                 return; // if parameters are no valid -> do nothing
             }
 
-            AddRegion(begin, end, _degreesOfNotFreeSpace);
+            AddRegion(begin, end, beginVertice, endVertice, centerVertice, _degreesOfNotFreeSpace);
+
             RemoveRegion(begin, end, _degreesOfFreeSpace);
 
         }
 
-        public void RemoveBlockedSpace(float begin, float end)
+        public void RemoveBlockedSpace(float begin, float end, int beginVertice, int endVertice, int centerVertice )
         {
             begin = FormatDegrees(begin);
             end = FormatDegrees(end);
@@ -61,16 +76,20 @@ namespace Framework
                 return; // if parameters are no valid -> do nothing
             }
 
-            AddRegion(begin, end, _degreesOfFreeSpace);
+            AddRegion(begin, end, beginVertice, endVertice, centerVertice, _degreesOfFreeSpace);
             RemoveRegion(begin, end, _degreesOfNotFreeSpace);
         }
 
-        private static void AddRegion(float begin, float end, List<Tuple<float,float>> regionCollection )
+        private static void AddRegion(float begin, float end,int beginVertice, int endVertice, int centerVertice, List<Angle> regionCollection )
         {
-            regionCollection.Add(Tuple.New(begin, end));
+            var angle = Angle.New(begin, end);
+            angle.OpeningVertice = beginVertice;
+            angle.ClosingVertice = endVertice;
+            angle.TargetVertice = centerVertice;
+            regionCollection.Add(angle);
         }
 
-        private void RemoveRegion(float begin, float end, List<Tuple<float, float>> regionCollection)
+        private void RemoveRegion(float begin, float end, List<Angle> regionCollection)
         {
 
 
@@ -112,7 +131,7 @@ namespace Framework
                 {
                     // Erzeuge 2 neue kleinere regionen
                     region.Second = begin;
-                    var newRegion = Tuple.New(end, region.Second);
+                    var newRegion = Angle.New(end, region.Second);
                     regionCollection.Add(newRegion);
                 }
                 else if (IsWithinRegion(begin, region)) // Startpunkt liegt innerhalb der region
@@ -127,7 +146,7 @@ namespace Framework
 
             }
 
-            regionCollection.Add(Tuple.New(begin, end));
+            regionCollection.Add(Angle.New(begin, end));
         }
 
 
@@ -138,7 +157,7 @@ namespace Framework
         }
 
 
-        private bool IsWithinRegion(float value, Tuple<float, float> region)
+        private bool IsWithinRegion(float value, Angle region)
         {
             bool valueIsOnEdge = (value.IsAlmostEqual(region.First, Tolerance) ||
                       value.IsAlmostEqual(region.Second, Tolerance));

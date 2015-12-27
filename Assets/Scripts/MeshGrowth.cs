@@ -18,48 +18,49 @@ public class MeshGrowth : MonoBehaviour
     private MeshFilter meshFilter;
 
 
-	// Use this for initialization
-	void Start ()
-	{
+    // Use this for initialization
+    void Start()
+    {
         meshFilter = gameObject.AddComponent<MeshFilter>();
-	    gameObject.AddComponent<MeshRenderer>();
+        gameObject.AddComponent<MeshRenderer>();
         meshFilter.mesh = new Mesh();
-        
+
         Vector3[] vertices = new Vector3[]
         {
-            new Vector3(-Width, -Height, 0), 
-            new Vector3(-Width, Height, 0), 
-            new Vector3(Width, Height, 0), 
+            new Vector3(-Width, -Height, 0),
+            new Vector3(-Width, Height, 0),
+            new Vector3(Width, Height, 0),
             new Vector3(Width, -Height, 0),
         };
 
         int[] triangles = new int[6];
 
-	    triangles[0] = 0;
-	    triangles[1] = 1;
-	    triangles[2] = 3;
+        triangles[0] = 0;
+        triangles[1] = 1;
+        triangles[2] = 3;
 
         triangles[3] = 1;
         triangles[4] = 2;
         triangles[5] = 3;
 
-	    meshFilter.mesh.vertices = vertices;
-	    meshFilter.mesh.triangles = triangles;
+        meshFilter.mesh.vertices = vertices;
+        meshFilter.mesh.triangles = triangles;
 
 
         InvokeRepeating("Grow", 1, 1);
-	}
-	
-	// Update is called once per frame
-	void Update () {
-	
-	}
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+
+    }
 
     private void Grow()
     {
         var randomIndex1 = Random.Range(0, meshFilter.mesh.triangles.Length - 1);
         int randomIndex2;
-        var rest = randomIndex1%3;
+        var rest = randomIndex1 % 3;
         if (rest == 2)
         {
             randomIndex2 = 1;
@@ -86,7 +87,7 @@ public class MeshGrowth : MonoBehaviour
 
         // Add new Triangle
         var newTriangles = meshFilter.mesh.triangles.ToList();
-        newTriangles.AddRange(new []{ randomIndex1 , randomIndex2 , newIndex });
+        newTriangles.AddRange(new[] { randomIndex1, randomIndex2, newIndex });
         meshFilter.mesh.triangles = newTriangles.ToArray();
     }
 
@@ -95,14 +96,31 @@ public class MeshGrowth : MonoBehaviour
     /// </summary>
     private void Grow2()
     {
+        var random = new Random();
         // Wähle ein freies Vertice aus.
-        GetVerticeIndicesWithEmptyNeighbour();
+        var choosenVertex = GetVerticeIndicesWithEmptyNeighbour().GetRandomElement();
+        var freeSpace = GetFreeSpace(choosenVertex);
+
+        // Choose any Free Space
+        var space = freeSpace.GetDegreesOfFreeSpace().GetRandomElement();
+        if (space.GetSize() > 60) // If space is gib  enough for more tha 1 additional vertice
+        {
+            // Add new vertice in free space
+            Vector3 newVertex = Quaternion.Euler(0, 0, Random.Range(space.First, space.First + space.GetSize())) * Vector3.up + meshFilter.mesh.vertices[choosenVertex];
+
+
+        }
+        else
+        {
+
+        }
+
     }
 
     private List<int> GetVerticeIndicesWithEmptyNeighbour()
     {
         List<int> indicesOfAvailableVertices = new List<int>();
-        for(int verticeIndex = 0; verticeIndex < meshFilter.mesh.vertices.Length; verticeIndex++)
+        for (int verticeIndex = 0; verticeIndex < meshFilter.mesh.vertices.Length; verticeIndex++)
         {
             // Schau ob das vertice in nur 6 Triangles vorkommt
             var index = verticeIndex;
@@ -121,16 +139,16 @@ public class MeshGrowth : MonoBehaviour
     {
         var result = new FreeSpace2D();
 
-        var neighbourUsages = new Dictionary<int, int> ();
+        var neighbourUsages = new Dictionary<int, int>();
 
         var triangles = new List<int[]>();
 
-        
+
         for (int triangle = 0; triangle + 2 < meshFilter.mesh.triangles.Length; triangle += 2)
         {
             // Get all using triangles
             var currentTriangle = meshFilter.mesh.triangles.SubArray(triangle, 2);
-            if (meshFilter.mesh.triangles.SubArray(triangle,2).Contains(verticeIndex))
+            if (meshFilter.mesh.triangles.SubArray(triangle, 2).Contains(verticeIndex))
             {
                 triangles.Add(currentTriangle);
 
@@ -150,7 +168,33 @@ public class MeshGrowth : MonoBehaviour
         }
 
         // Remove free spaces 
-        
+        foreach (var triangle in triangles)
+        {
+            var neighbourIndices = triangle.Where(index => index != verticeIndex).ToArray();
+
+            // Get first direction
+            var direction1 = meshFilter.mesh.vertices[neighbourIndices[0]] - meshFilter.mesh.vertices[verticeIndex];
+
+            // Get second direction
+            var direction2 = meshFilter.mesh.vertices[neighbourIndices[1]] - meshFilter.mesh.vertices[verticeIndex];
+
+            // Get angle between triangle points
+            var angle = Vector3.Angle(direction1, direction2);
+            float beginAngle;
+            if (angle < 180) 
+            {
+                beginAngle = Vector3.Angle(Vector3.up, direction1);
+            }
+            else // The triangle mesh is closed in other direction
+            {
+
+                angle = Vector3.Angle(direction2, direction1);
+                beginAngle = Vector3.Angle(Vector3.up, direction2);
+                //
+            }
+            // Remove Space
+            result.AddBlockedSpace(beginAngle, beginAngle + angle, neighbourIndices[0], neighbourIndices[1], verticeIndex);
+        }
 
 
         return result;
