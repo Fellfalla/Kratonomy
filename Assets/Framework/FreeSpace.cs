@@ -36,30 +36,6 @@ namespace Framework
         {
             var result = new FreeSpace2D();
             result.CenterVertice = vertice;
-            //var neighbourUsages = new Dictionary<int, int>();
-
-            //foreach (var triangle in vertice.Triangles)
-            //{
-            //    // Get all existing neighbours
-            //    foreach (var index in triangle.Where(index => index != vertice.Index))
-            //    {
-            //        if (!neighbourUsages.ContainsKey(index))
-            //        {
-            //            neighbourUsages.Add(index, 1);
-            //        }
-            //        else
-            //        {
-            //            neighbourUsages[index]++;
-            //        }
-            //    }
-            //}
-
-            //// Find neighbours with free second neighbour
-            //var freeNeighbours = new List<Tuple<int, Vector3>>();
-            //foreach (var freeNeighbour in neighbourUsages.Where((pair) => pair.Value == 1))
-            //{
-            //    freeNeighbours.Add(Tuple.New(freeNeighbour.Key, vertice.Mesh.vertices[freeNeighbour.Key]));
-            //}
 
             // Remove free spaces 
             foreach (var triangle in vertice.Triangles)

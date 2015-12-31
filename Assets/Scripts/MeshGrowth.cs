@@ -17,30 +17,54 @@ public class MeshGrowth : MonoBehaviour
 {
     public float Width = 1f;
     public float Height = 1f;
+    public float GrowSize = 1f;
 
     /// <summary>
     /// Adds a new Face every * seconds
     /// </summary>
     public float GrowRate = 1f;
 
-    private MeshFilter meshFilter;
+    private MeshFilter _meshFilter;
 
+    // Use this for initialization
+    void Awake()
+    {
+
+        if ((_meshFilter = gameObject.GetComponent<MeshFilter>()) == null)
+        {
+            _meshFilter = gameObject.AddComponent<MeshFilter>();
+        }
+
+        if (_meshFilter.mesh == null || _meshFilter.mesh.vertexCount == 0)
+        {
+            _meshFilter.mesh = CreateInitialMesh(Width, Height);
+        }
+
+        if (gameObject.GetComponent<MeshRenderer>() == null)
+        {
+            gameObject.AddComponent<MeshRenderer>();
+        }
+
+    }
 
     // Use this for initialization
     void Start()
     {
-        
-        meshFilter = gameObject.AddComponent<MeshFilter>();
-        gameObject.AddComponent<MeshRenderer>();
-        meshFilter.mesh = new Mesh();
-        meshFilter.mesh.MarkDynamic();
+
+        InvokeRepeating("Grow", GrowRate, GrowRate);
+    }
+
+    private static Mesh CreateInitialMesh(float width, float height)
+    {
+        var mesh = new Mesh();
+        mesh.MarkDynamic();
 
         Vector3[] vertices = new Vector3[]
         {
-            new Vector3(-Width, -Height, 0),
-            new Vector3(-Width, Height, 0),
-            new Vector3(Width, Height, 0),
-            new Vector3(Width, -Height, 0),
+            new Vector3(-width, -height, 0),
+            new Vector3(-width, height, 0),
+            new Vector3(width, height, 0),
+            new Vector3(width, -height, 0),
         };
 
         int[] triangles = new int[6];
@@ -53,11 +77,9 @@ public class MeshGrowth : MonoBehaviour
         triangles[4] = 2;
         triangles[5] = 3;
 
-        meshFilter.mesh.vertices = vertices;
-        meshFilter.mesh.triangles = triangles;
-
-
-        InvokeRepeating("Grow", GrowRate, GrowRate);
+        mesh.vertices = vertices;
+        mesh.triangles = triangles;
+        return mesh;
     }
 
     // Update is called once per frame
@@ -73,7 +95,7 @@ public class MeshGrowth : MonoBehaviour
     {
         // Wähle ein freies Vertice aus.
         var choosenVertex = GetVerticeIndicesWithEmptyNeighbour().GetRandomElement();
-        Vertice vertice = new Vertice(meshFilter.mesh, choosenVertex);
+        Vertice vertice = new Vertice(_meshFilter.mesh, choosenVertex);
 
         // Choose any Free Space
         var space = FreeSpace2D.GetFreeSpace(vertice).GetRegionsOfFreeSpace().GetRandomElement();
@@ -87,29 +109,37 @@ public class MeshGrowth : MonoBehaviour
         float minAngle = 45;
         if (space.GetSize() > maxAngle) // If space is big enough for more tha 1 additional vertice
         {
-            // Add new vertice in free space
-            Vector3 newVertex = Quaternion.Euler(0, 0, Random.Range(space.Begin + minAngle, space.Begin + maxAngle)) * Vector3.up + meshFilter.mesh.vertices[choosenVertex];
-            var newVertexLength = 1;
-            newVertex *= newVertexLength;
-            meshFilter.mesh.vertices = meshFilter.mesh.vertices.Concat(new[] {newVertex}).ToArray();
+            var initialVector = Vector3.up;
+            initialVector.Scale(new Vector3(GrowSize, GrowSize, GrowSize));
+            Vector3 targetPoint = Quaternion.Euler(0, 0, Random.Range(space.Begin + minAngle, space.Begin + maxAngle)) * initialVector +
+                            _meshFilter.mesh.vertices[choosenVertex];
 
-            int thirdVertexIndex;
-
+            int first = vertice.Index;
+           
+            int third;
             if (space.OpeningVertice != null)
             {
-                thirdVertexIndex = space.OpeningVertice.Index;
+                third = space.OpeningVertice.Index;
             }
             else if (space.ClosingVertice != null)
             {
-                thirdVertexIndex = space.ClosingVertice.Index;
+                third = space.ClosingVertice.Index;
             }
             else
             {
+                Debug.Log("No Vertice for Growth found");
                 return;
             }
-            meshFilter.mesh.triangles =
-                meshFilter.mesh.triangles.Concat(new[]
-                {vertice.Index, meshFilter.mesh.vertices.Length - 1, thirdVertexIndex}).ToArray();
+
+            var range = Convert.ToSingle(GrowSize/2);
+            var second = ExistingVertexWithinRange(vertice.Mesh, targetPoint, range);
+
+            if (second == null) // look no existing Vertex is near
+            {
+                second = AddNewVertex(space, targetPoint, vertice);
+            }
+
+            CreateTriangle(vertice.Mesh, first, second.Value, third);
 
         }
         else
@@ -119,21 +149,84 @@ public class MeshGrowth : MonoBehaviour
                 return;
             }
 
-            meshFilter.mesh.triangles =
-                meshFilter.mesh.triangles.Concat(new[]
-                {vertice.Index, space.OpeningVertice.Index, space.ClosingVertice.Index}).ToArray();
-        }
+            CreateTriangle(vertice.Mesh, vertice.Index, space.OpeningVertice.Index, space.ClosingVertice.Index);
 
+        }
+        FinishGrow();
+    }
+
+    private int? ExistingVertexWithinRange(Mesh mesh, Vector3 position, float sqareRange)
+    {
+        var nearVertices = new Dictionary<int, float>();
+
+        for (int i = 0; i < mesh.vertexCount; i++)
+        {
+            var dist = (mesh.vertices[i] - position).sqrMagnitude;
+            if (sqareRange > dist)
+            {
+                var range = Convert.ToSingle(Math.Sqrt(sqareRange));
+                Debug.DrawLine(position - new Vector3(range, 0, 0), position + new Vector3(range, 0, 0), Color.red, 0.8f);
+                Debug.DrawLine(position - new Vector3(0, range, 0), position + new Vector3(0, range, 0), Color.red, 0.8f);
+                nearVertices.Add(i,dist);
+            }
+            
+        }
+        if (nearVertices.Any())
+        {
+            return nearVertices.OrderBy(pair => pair.Value).Select(pair => pair.Key).First();
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+
+    private int AddNewVertex(RadialSpace space, Vector3 newVertex, Vertice vertice)
+    {
+        // Add new vertice in free space
+        var newVertexLength = 1;
+        newVertex *= newVertexLength;
+        _meshFilter.mesh.vertices = _meshFilter.mesh.vertices.Concat(new[] {newVertex}).ToArray();
+
+        return _meshFilter.mesh.vertices.Length - 1;
+
+    }
+
+    private void CreateTriangle(Mesh mesh, int first, int second, int third)
+    {
+        // Calculate the right direction 
+        var crossProd = Vector3.Cross(mesh.vertices[second] - mesh.vertices[first],
+            mesh.vertices[third] - mesh.vertices[first]);
+        if (Vector3.Dot(crossProd, Vector3.forward) < 0) // both look in contrary direction and order is ok
+        {
+            mesh.triangles =
+                _meshFilter.mesh.triangles.Concat(new[]
+                {first, second, third}).ToArray();
+        }
+        else
+        {
+            mesh.triangles =
+                _meshFilter.mesh.triangles.Concat(new[]
+                {first, third, second}).ToArray();
+        }
+    }
+
+
+    private void FinishGrow()
+    {
+        _meshFilter.mesh.RecalculateNormals();
+        _meshFilter.mesh.Optimize();
     }
 
     private List<int> GetVerticeIndicesWithEmptyNeighbour()
     {
         List<int> indicesOfAvailableVertices = new List<int>();
-        for (int verticeIndex = 0; verticeIndex < meshFilter.mesh.vertices.Length; verticeIndex++)
+        for (int verticeIndex = 0; verticeIndex < _meshFilter.mesh.vertices.Length; verticeIndex++)
         {
             // Schau ob das vertice in nur 6 Triangles vorkommt
             var index = verticeIndex;
-            if (meshFilter.mesh.triangles.Count(i => i == index) < 6)
+            if (_meshFilter.mesh.triangles.Count(i => i == index) < 6)
             {
                 indicesOfAvailableVertices.Add(verticeIndex);
             }
