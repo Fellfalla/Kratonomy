@@ -18,9 +18,6 @@ public static class MeshHelper
     static List<int> indices;
     static Dictionary<uint,int> newVectices;
 
-    static Vector3 center;
-    static float averageDiameter;
-
     static void InitArrays(Mesh mesh)
     {
         vertices = new List<Vector3>(mesh.vertices);
@@ -99,15 +96,8 @@ public static class MeshHelper
             indices.Add(a );   indices.Add(b);   indices.Add(c); // center triangle
         }
 
-        if (amount != 0)
-        {
-            for (int i = 0; i < vertices.Count; i++)
-            {
-                vertices[i] = RoundVertex(vertices[i], amount, jitter);
-            }
-        }
-
         mesh.vertices = vertices.ToArray();
+        //mesh.vertices = RoundVertices(vertices.ToArray(), amount, jitter);
         if (normals.Count > 0)
             mesh.normals = normals.ToArray();
         if (colors.Count>0)
@@ -158,12 +148,27 @@ public static class MeshHelper
         return newIndex;
     }
 
-    private static Vector3 RoundVertex(Vector3 vertex, float amount, float jitter)
+    public static Vector3[] RoundVertices(Vector3[] vertices, float amount, float jitter, float radius, Vector3 center)
     {
-        var diameterDeviation = vertex.magnitude - averageDiameter;
-        var scaleAmount = -diameterDeviation * amount * Random.Range(1 - jitter, 1 + jitter);
-        var correction = Vector3.Scale(vertex.normalized, new Vector3(scaleAmount, scaleAmount, scaleAmount));
-        return vertex + correction;
+        if (amount != 0)
+        {
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                Vector3 vertex = vertices[i];
+
+                // Get difference from average radius
+                var diameterDeviation = vertex.magnitude - radius;
+
+                // Calculate the amount of scale
+                var scaleAmount = -diameterDeviation * amount + Random.Range(- jitter,jitter);
+
+                // Calculate the correction vector
+                var correction = Vector3.Scale(vertex.normalized, new Vector3(scaleAmount, scaleAmount, scaleAmount));
+
+                vertices[i] = vertex + correction;
+            }
+        }
+        return vertices;
     }
 
     /// <summary>
@@ -180,11 +185,8 @@ public static class MeshHelper
         for (int i = 0; i < triangles.Length; i += 3)
         {
             int i1 = triangles[i + 0];
-            mesh.vertices[i1] = RoundVertex(mesh.vertices[i1], amount, jitter);
             int i2 = triangles[i + 1];
-            mesh.vertices[i2] = RoundVertex(mesh.vertices[i2], amount, jitter);
             int i3 = triangles[i + 2];
-            mesh.vertices[i3] = RoundVertex(mesh.vertices[i3], amount, jitter);
 
             int a1 = GetNewVertex9(i1, i2, i1);
             int a2 = GetNewVertex9(i2, i1, i2);
@@ -206,15 +208,9 @@ public static class MeshHelper
             indices.Add(d );   indices.Add(b2);   indices.Add(c1);
         }
 
-        if (amount != 0)
-        {
-            for (int i = 0; i < vertices.Count; i++)
-            {
-                vertices[i] = RoundVertex(vertices[i], amount, jitter);
-            }
-        }
 
         mesh.vertices = vertices.ToArray();
+        //mesh.vertices = RoundVertices(vertices.ToArray(), amount, jitter);
         if (normals.Count > 0)
             mesh.normals = normals.ToArray();
         if (colors.Count>0)
@@ -273,43 +269,7 @@ public static class MeshHelper
     #endregion Subdivide
 
 
-    #region Rounding Subdivision
-    public static void RoundAndSubdivide(Mesh mesh, int level, float amount, float jitter)
-    {
-        center = new Vector3(0, 0, 0);
-        averageDiameter = 0;
 
-        foreach (var vector3 in mesh.vertices)
-        {
-            center += vector3;
-            averageDiameter += vector3.magnitude;
-        }
-
-        averageDiameter /= mesh.vertexCount;
-
-        if (level < 2)
-            return;
-        while (level > 1)
-        {
-            // remove prime factor 3
-            while (level % 3 == 0)
-            {
-                Subdivide9(mesh, amount, jitter);
-                level /= 3;
-            }
-            // remove prime factor 2
-            while (level % 2 == 0)
-            {
-                Subdivide4(mesh, amount, jitter);
-                level /= 2;
-            }
-            // try to approximate. All other primes are increased by one
-            // so they can be processed
-            if (level > 3)
-                level++;
-        }
-    }
-    #endregion  Rounding Subdivision
 
 
 
