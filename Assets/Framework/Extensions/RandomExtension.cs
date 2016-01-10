@@ -26,5 +26,14 @@ namespace Framework.Extensions
             int index = random.Next(0, castedEnum.Length);
             return castedEnum[index];
         }
+
+        public static float GetRandomFloat(this Random random, float min = 0, float max = 1)
+        {
+            var randomValue = random.NextDouble();
+
+            return min + (max - min)* Convert.ToSingle(randomValue);
+
+        }
+
     }
 }

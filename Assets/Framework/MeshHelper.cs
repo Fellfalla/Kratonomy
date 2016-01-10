@@ -148,7 +148,7 @@ public static class MeshHelper
         return newIndex;
     }
 
-    public static Vector3[] RoundVertices(Vector3[] vertices, float amount, float jitter, float radius, Vector3 center)
+    public static Vector3[] RoundVertices(Vector3[] vertices, float amount, float radius, Vector3 center)
     {
         if (amount != 0)
         {
@@ -160,7 +160,7 @@ public static class MeshHelper
                 var diameterDeviation = vertex.magnitude - radius;
 
                 // Calculate the amount of scale
-                var scaleAmount = -diameterDeviation * amount + Random.Range(- jitter,jitter);
+                var scaleAmount = -diameterDeviation*amount;
 
                 // Calculate the correction vector
                 var correction = Vector3.Scale(vertex.normalized, new Vector3(scaleAmount, scaleAmount, scaleAmount));
@@ -271,7 +271,19 @@ public static class MeshHelper
 
 
 
+    public static int[] ReplaceIndices(int[] indexArray, int oldIndex, int newIndex)
+    {
+        for (int i = 0; i < indexArray.Length; i++)
+        {
+            if (indexArray[i] == oldIndex)
+            {
+                indexArray[i] = newIndex;
+            }
+        }
+        return indexArray;
+    }
 
+    //public static int Get
 
     public static Mesh DuplicateMesh(Mesh mesh)
     {
